@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.32.9
-# Sun Jul  3 17:55:44 2011
+# Wed Jul  6 20:59:12 2011
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -133,9 +133,11 @@ CONFIG_IOSCHED_NOOP=y
 CONFIG_IOSCHED_AS=y
 # CONFIG_IOSCHED_DEADLINE is not set
 # CONFIG_IOSCHED_CFQ is not set
+CONFIG_IOSCHED_BFQ=y
 CONFIG_DEFAULT_AS=y
 # CONFIG_DEFAULT_DEADLINE is not set
 # CONFIG_DEFAULT_CFQ is not set
+# CONFIG_DEFAULT_BFQ is not set
 # CONFIG_DEFAULT_NOOP is not set
 CONFIG_DEFAULT_IOSCHED="anticipatory"
 CONFIG_FREEZER=y
@@ -1006,7 +1008,7 @@ CONFIG_SMC91X=y
 CONFIG_WLAN=y
 # CONFIG_WLAN_PRE80211 is not set
 # CONFIG_WLAN_80211 is not set
-CONFIG_LIBRA_SDIOIF=m
+# CONFIG_LIBRA_SDIOIF is not set
 # CONFIG_BCM4329 is not set
 # CONFIG_DHD is not set
 
