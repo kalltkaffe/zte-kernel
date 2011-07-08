@@ -223,9 +223,36 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	
 
 	if (down) {
-		input_report_abs(ts->input_dev, ABS_X, x);
-		input_report_abs(ts->input_dev, ABS_Y, y);
-			input_report_abs(ts->input_dev, ABS_PRESSURE, z);
+// MT HACK
+//		printk("%s: down=%d, x=%d, y=%d, z=%d, status %x\n", __func__, down, x, y, z, tssc_status);
+		if(z>1100) {	// Gestures
+			int diff = (z - 1100)/2;
+			// Finger1
+                        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
+                        input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x-diff);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y+diff);
+                        input_mt_sync(ts->input_dev);
+			// Finger2
+                        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
+                        input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x+diff);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y-diff);
+                        input_mt_sync(ts->input_dev);
+		} else {
+//
+//			input_report_abs(ts->input_dev, ABS_X, x);
+//			input_report_abs(ts->input_dev, ABS_Y, y);
+//			input_report_abs(ts->input_dev, ABS_PRESSURE, z);
+//			input_report_abs(ts->input_dev, ABS_PRESSURE, (z+2)/4);
+// MT HACK
+                        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, (z+2)/4);
+                        input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y);
+                        input_mt_sync(ts->input_dev);
+		}
+//
 	}
 	input_report_key(ts->input_dev, BTN_TOUCH, down);
 	input_sync(ts->input_dev);
@@ -463,13 +490,16 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	input_set_capability(ts->input_dev, EV_KEY, BTN_TOUCH);
 	set_bit(EV_ABS, ts->input_dev->evbit);
 
-	input_set_abs_params(ts->input_dev, ABS_X, pdata->min_x, pdata->max_x,
-			     0, 0);
-	input_set_abs_params(ts->input_dev, ABS_Y, pdata->min_y, pdata->max_y,
-			     0, 0);
-	input_set_abs_params(ts->input_dev, ABS_PRESSURE, pdata->min_press,
-			     pdata->max_press, 0, 0);
+//	input_set_abs_params(ts->input_dev, ABS_X, pdata->min_x, pdata->max_x, 0, 0);
+//	input_set_abs_params(ts->input_dev, ABS_Y, pdata->min_y, pdata->max_y, 0, 0);
+//	input_set_abs_params(ts->input_dev, ABS_PRESSURE, pdata->min_press, pdata->max_press, 0, 0);
 
+// MT HACK
+	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, pdata->min_x, pdata->max_x, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, pdata->min_y, pdata->max_y, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, pdata->min_press, pdata->max_press, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
+//
 /*
 	for (i = 0; pdata->vkeys_x && (i < pdata->vkeys_x->num_keys); ++i)
 		input_set_capability(ts->input_dev, EV_KEY,
