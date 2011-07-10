@@ -224,20 +224,20 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 
 	if (down) {
 // MT HACK
-//		printk("%s: down=%d, x=%d, y=%d, z=%d, status %x\n", __func__, down, x, y, z, tssc_status);
-		if(z>1100) {	// Gestures
-			int diff = (z - 1100)/2;
+		if(z>1150) {	// Pinch zoom emulation
+//			int diff = (z - 1100)/2;
+//			if (diff < 30) diff = 30;
 			// Finger1
                         input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
                         input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
-                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x-diff);
-                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y+diff);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, 480 + y/2);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, 480 - y/2);
                         input_mt_sync(ts->input_dev);
 			// Finger2
                         input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
                         input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
-                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x+diff);
-                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y-diff);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_X, 480 - y/2);
+                        input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, 480 + y/2);
                         input_mt_sync(ts->input_dev);
 		} else {
 //
@@ -246,7 +246,8 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 //			input_report_abs(ts->input_dev, ABS_PRESSURE, z);
 //			input_report_abs(ts->input_dev, ABS_PRESSURE, (z+2)/4);
 // MT HACK
-                        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, (z+2)/4);
+                        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, z);
+//                        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, (z+2)/4);
                         input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
                         input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x);
                         input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y);
