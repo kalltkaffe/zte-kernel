@@ -221,11 +221,14 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 	*/
-	
+
 
 	if (down) {
-		if(z>1100) {	// Pinch zoom emulation
-			if(!ts->zoomhack) {		// Flush to avoid jumpiness
+		if(z>1100 && z<1200) { 		// blind spot (1101-1199)
+			down = 0;
+			ts->zoomhack = 1;
+		} else if(z>=1200) {		// Pinch zoom emulation
+			if(!ts->zoomhack) {	// Flush real position to avoid jumpiness
 				down = 0;
 				ts->zoomhack = 1;
 			}
@@ -245,7 +248,7 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
                         	input_mt_sync(ts->input_dev);
 			}
 		} else {
-			if(ts->zoomhack) {		// Flush!
+			if(ts->zoomhack) {	// Flush faked positions to avoid jumpiness
 				down = 0;
 				ts->zoomhack = 0;
 			} else {
