@@ -143,6 +143,7 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	int x, y, z1, z2;
 	int was_down;
 	int down;
+	int z=0;
 	tssc_ctl = tssc_readl(ts, TSSC_CTL);
 	tssc_status = tssc_readl(ts, TSSC_STATUS);
 	tssc_avg12 = tssc_readl(ts, TSSC_AVG_12);
@@ -154,13 +155,6 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	y = tssc_avg12 >> 16;
 	z1 = tssc_avg34 & 0xffff;
 	z2 = tssc_avg34 >> 16;
-	
-
-        /* invert the inputs if necessary */
-        if (pdata->inv_x) x = pdata->inv_x - x;
-        if (pdata->inv_y) y = pdata->inv_y - y;
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
 
 	down = !(tssc_ctl & TSSC_CTL_PENUP_IRQ);
 	was_down = ts->ts_down;
@@ -173,6 +167,21 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	if (msm_tsdebug & 2)
 		printk("%s: down=%d, x=%d, y=%d, z1=%d, z2=%d, status %x\n",
 		       __func__, down, x, y, z1, z2, tssc_status);
+	if (down)
+	{
+		//if ( 0 == z1 ) return IRQ_HANDLED;
+		//z = ( ( 2 * z2 - 2 * z1 - 3) * x) / ( 2 * z1 + 3);
+		z = ( ( z2 - z1 - 2)*x) / ( z1 + 2 );
+		z = ( 2500 - z ) * 1000 / ( 2500 - 900 );
+		//printk("wly: msm_ts_irq,z=%d,z1=%d,z2=%d,x=%d\n",z,z1,z2,x);
+		if( z<=0 ) z = 255;
+	}
+
+	/* invert the inputs if necessary */
+	if (pdata->inv_x) x = pdata->inv_x - x;
+	if (pdata->inv_y) y = pdata->inv_y - y;
+	if (x < 0) x = 0;
+	if (y < 0) y = 0;
 
 	if (!was_down && down) {
 		struct ts_virt_key *vkey = NULL;
@@ -207,10 +216,10 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 
 
 	if (down) {
-		if(z1>1100 && z1<1200) { 		// blind spot (1101-1199)
+		if(z>1100 && z<1200) { 		// blind spot (1101-1199)
 			down = 0;
 			ts->zoomhack = 1;
-		} else if(z1>=1200) {		// Pinch zoom emulation
+		} else if(z>=1200) {		// Pinch zoom emulation
 			if(!ts->zoomhack) {	// Flush real position to avoid jumpiness
 				down = 0;
 				ts->zoomhack = 1;
@@ -235,7 +244,7 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 				down = 0;
 				ts->zoomhack = 0;
 			} else {
-				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, (z1+1)/2);
+				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, (z+1)/2);
                 	        input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
                        		input_report_abs(ts->input_dev, ABS_MT_POSITION_X, x);
                        		input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y);
