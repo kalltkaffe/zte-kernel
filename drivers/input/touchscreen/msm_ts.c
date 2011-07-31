@@ -81,7 +81,6 @@ struct msm_ts {
 	uint32_t			ts_down:1;
 	uint32_t			zoomhack;
 	struct ts_virt_key		*vkey_down;
-	//struct marimba_tsadc_client	*ts_client;
 
 	unsigned int			sample_irq;
 	unsigned int			pen_up_irq;
@@ -144,6 +143,7 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	int was_down;
 	int down;
 	int z=0;
+	del_timer_sync(&ts->timer);
 	tssc_ctl = tssc_readl(ts, TSSC_CTL);
 	tssc_status = tssc_readl(ts, TSSC_STATUS);
 	tssc_avg12 = tssc_readl(ts, TSSC_AVG_12);
@@ -255,86 +255,29 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	input_report_key(ts->input_dev, BTN_TOUCH, down);
 	input_sync(ts->input_dev);
 
-	//if (30 == irq)mod_timer(&ts->timer,jiffies + msecs_to_jiffies(TS_PENUP_TIMEOUT_MS));
+	if (30 == irq)mod_timer(&ts->timer,jiffies + msecs_to_jiffies(TS_PENUP_TIMEOUT_MS));
 	return IRQ_HANDLED;
-}
-
-static void dump_tssc_regs(struct msm_ts *ts)
-{
-#define __dump_tssc_reg(r) \
-		do { printk(#r " %x\n", tssc_readl(ts, (r))); } while(0)
-
-	__dump_tssc_reg(TSSC_CTL);
-	__dump_tssc_reg(TSSC_OPN);
-	__dump_tssc_reg(TSSC_SAMPLING_INT);
-	__dump_tssc_reg(TSSC_STATUS);
-	__dump_tssc_reg(TSSC_AVG_12);
-	__dump_tssc_reg(TSSC_AVG_34);
-	__dump_tssc_reg(TSSC_TEST_1);
-#undef __dump_tssc_reg
 }
 
 static int __devinit msm_ts_hw_init(struct msm_ts *ts)
 {
-
-	uint32_t tmp;
-
-	/* Enable the register clock to tssc so we can configure it. */
-	tssc_writel(ts, TSSC_CTL_ENABLE, TSSC_CTL);
-	/* Enable software reset*/
-	tssc_writel(ts, TSSC_CTL_SW_RESET, TSSC_CTL);
-
-	/* op1 - measure X, 1 sample, 12bit resolution */
-	tmp = (TSSC_OPN_4WIRE_X << 16) | (2 << 8) | (2 << 0);
-	/* op2 - measure Y, 1 sample, 12bit resolution */
-	tmp |= (TSSC_OPN_4WIRE_Y << 20) | (2 << 10) | (2 << 2);
-	/* op3 - measure Z1, 1 sample, 8bit resolution */
-	tmp |= (TSSC_OPN_4WIRE_Z1 << 24) | (2 << 12) | (0 << 4);
-
-	/* XXX: we don't actually need to measure Z2 (thus 0 samples) when
-	 * doing voltage-driven measurement */
-	/* op4 - measure Z2, 0 samples, 8bit resolution */
-	tmp |= (TSSC_OPN_4WIRE_Z2 << 28) | (0 << 14) | (0 << 6);
-	tssc_writel(ts, tmp, TSSC_OPN);
-
-	/* 16ms sampling interval */
-	tssc_writel(ts, 16, TSSC_SAMPLING_INT);
-	/* Enable gating logic to fix the timing delays caused because of
-	 * enabling debounce logic */
-	tssc_writel(ts, TSSC_TEST_1_EN_GATE_DEBOUNCE, TSSC_TEST_1);
-
 	setup_next_sample(ts);
 
 	return 0;
-}
-
-static void msm_ts_enable(struct msm_ts *ts, bool enable)
-{
-       uint32_t val;
-
-       if (enable == true)
-               msm_ts_hw_init(ts);
-       else {
-               val = tssc_readl(ts, TSSC_CTL);
-               val &= ~TSSC_CTL_ENABLE;
-               tssc_writel(ts, val, TSSC_CTL);
-       }
 }
 
 #ifdef CONFIG_PM
 static int
 msm_ts_suspend(struct device *dev)
 {
-        struct msm_ts *ts =  dev_get_drvdata(dev);
+	struct msm_ts *ts =  dev_get_drvdata(dev);
+	uint32_t val;
 
-        if (device_may_wakeup(dev) &&
-                        device_may_wakeup(dev->parent))
-                enable_irq_wake(ts->sample_irq);
-        else {
-                disable_irq(ts->sample_irq);
-                disable_irq(ts->pen_up_irq);
-                msm_ts_enable(ts, false);
-        }
+	disable_irq(ts->sample_irq);
+	disable_irq(ts->pen_up_irq);
+	val = tssc_readl(ts, TSSC_CTL);
+	val &= ~TSSC_CTL_ENABLE;
+	tssc_writel(ts, val, TSSC_CTL);
 
 	return 0;
 }
@@ -344,14 +287,10 @@ msm_ts_resume(struct device *dev)
 {
 	struct msm_ts *ts =  dev_get_drvdata(dev);
 
-        if (device_may_wakeup(dev) &&
-                        device_may_wakeup(dev->parent))
-                disable_irq_wake(ts->sample_irq);
-        else {
-                msm_ts_enable(ts, true);
-                enable_irq(ts->sample_irq);
-                enable_irq(ts->pen_up_irq);
-        }
+	msm_ts_hw_init(ts);
+
+	enable_irq(ts->sample_irq);
+	enable_irq(ts->pen_up_irq);
 
 	return 0;
 }
@@ -418,13 +357,6 @@ static int ts_key_report_init(void)
 
 	return 0;
 }
-
-static void ts_key_report_init_deinit(void)
-{
-	sysfs_remove_file(virtual_key_kobj, &dev_attr_virtualkeys.attr);
-	kobject_del(virtual_key_kobj);
-}
-
 #endif
 
 static int __devinit msm_ts_probe(struct platform_device *pdev)
@@ -435,10 +367,7 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	struct resource *irq1_res;
 	struct resource *irq2_res;
 	int err = 0;
-	
 	int i;
-	/*struct marimba_tsadc_client *ts_client;*/
-    
 
 	tssc_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tssc");
 	irq1_res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tssc1");
@@ -472,22 +401,7 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 		err = -ENOMEM;
 		goto err_ioremap_tssc;
 	}
-#if 0
-	ts_client = marimba_tsadc_register(pdev, 1);
-	if (IS_ERR(ts_client)) {
-		pr_err("%s: Unable to register with TSADC\n", __func__);
-		err = -ENOMEM;
-		goto err_tsadc_register;
-	}
-	ts->ts_client = ts_client;
 
-	err = marimba_tsadc_start(ts_client);
-	if (err) {
-		pr_err("%s: Unable to start TSADC\n", __func__);
-		err = -EINVAL;
-		goto err_start_tsadc;
-	}
-#endif
 	ts->input_dev = input_allocate_device();
 	if (ts->input_dev == NULL) {
 		pr_err("failed to allocate touchscreen input device\n");
@@ -501,10 +415,6 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 
 	input_set_capability(ts->input_dev, EV_KEY, BTN_TOUCH);
 	set_bit(EV_ABS, ts->input_dev->evbit);
-
-//	input_set_abs_params(ts->input_dev, ABS_X, pdata->min_x, pdata->max_x, 0, 0);
-//	input_set_abs_params(ts->input_dev, ABS_Y, pdata->min_y, pdata->max_y, 0, 0);
-//	input_set_abs_params(ts->input_dev, ABS_PRESSURE, pdata->min_press, pdata->max_press, 0, 0);
 
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, pdata->min_x, pdata->max_x, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, pdata->min_y, pdata->max_y, 0, 0);
@@ -524,7 +434,7 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 		goto err_input_dev_reg;
 	}
 
-  setup_timer(&ts->timer, ts_timer, (unsigned long)ts);  
+	setup_timer(&ts->timer, ts_timer, (unsigned long)ts);
 	msm_ts_hw_init(ts);
 
 	err = request_irq(ts->sample_irq, msm_ts_irq,
@@ -553,15 +463,12 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	register_early_suspend(&ts->early_suspend);
 #endif
 
-	//        device_init_wakeup(&pdev->dev, pdata->can_wakeup);
 	pr_info("%s: tssc_base=%p irq1=%d irq2=%d\n", __func__,
 		ts->tssc_base, (int)ts->sample_irq, (int)ts->pen_up_irq);
 
-//xiayc
 #if defined(CONFIG_TOUCHSCREEN_VIRTUAL_KEYS)
 	ts_key_report_init();
 #endif
-	dump_tssc_regs(ts);
 	return 0;
 
 err_request_irq2:
@@ -589,25 +496,6 @@ err_ioremap_tssc:
 	return err;
 }
 
-static int __devexit msm_ts_remove(struct platform_device *pdev)
-{
-	struct msm_ts *ts = platform_get_drvdata(pdev);
-
-	device_init_wakeup(&pdev->dev, 0);
-	//	marimba_tsadc_unregister(ts->ts_client);
-	free_irq(ts->sample_irq, ts);
-	free_irq(ts->pen_up_irq, ts);
-	input_unregister_device(ts->input_dev);
-	iounmap(ts->tssc_base);
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&ts->early_suspend);
-#endif
-	platform_set_drvdata(pdev, NULL);
-	kfree(ts);
-
-	return 0;
-}
-
 static struct platform_driver msm_touchscreen_driver = {
 	.driver = {
 		.name = "msm_touchscreen",
@@ -617,7 +505,6 @@ static struct platform_driver msm_touchscreen_driver = {
 #endif
 	},
 	.probe		= msm_ts_probe,
-	.remove = __devexit_p(msm_ts_remove),
 };
 
 static int __init msm_ts_init(void)
