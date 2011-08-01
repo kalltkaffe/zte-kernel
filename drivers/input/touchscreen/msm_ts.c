@@ -109,7 +109,7 @@ static void setup_next_sample(struct msm_ts *ts)
 	tssc_writel(ts, tmp, TSSC_CTL);
 }
 
-
+#ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 static struct ts_virt_key *find_virt_key(struct msm_ts *ts,
 					 struct msm_ts_virtual_keys *vkeys,
 					 uint32_t val)
@@ -124,6 +124,7 @@ static struct ts_virt_key *find_virt_key(struct msm_ts *ts,
 			return &vkeys->keys[i];
 	return NULL;
 }
+#endif
 
 
 static void ts_timer(unsigned long arg)
@@ -183,6 +184,7 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	if (x < 0) x = 0;
 	if (y < 0) y = 0;
 
+#ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 	if (!was_down && down) {
 		struct ts_virt_key *vkey = NULL;
 
@@ -212,7 +214,7 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 		}
 		return IRQ_HANDLED;
 	}
-
+#endif
 
 
 	if (down) {
@@ -367,8 +369,9 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	struct resource *irq1_res;
 	struct resource *irq2_res;
 	int err = 0;
+#ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 	int i;
-
+#endif
 	tssc_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tssc");
 	irq1_res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tssc1");
 	irq2_res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tssc2");
@@ -421,12 +424,14 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, pdata->min_press, pdata->max_press, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
 
+#ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 	for (i = 0; pdata->vkeys_x && (i < pdata->vkeys_x->num_keys); ++i)
 		input_set_capability(ts->input_dev, EV_KEY,
 				     pdata->vkeys_x->keys[i].key);
 	for (i = 0; pdata->vkeys_y && (i < pdata->vkeys_y->num_keys); ++i)
 		input_set_capability(ts->input_dev, EV_KEY,
 				     pdata->vkeys_y->keys[i].key);
+#endif
 
 	err = input_register_device(ts->input_dev);
 	if (err != 0) {
