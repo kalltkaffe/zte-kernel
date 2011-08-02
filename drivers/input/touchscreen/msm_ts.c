@@ -221,24 +221,40 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 		if(z>1100 && z<1200) { 		// blind spot (1101-1199)
 			down = 0;
 			ts->zoomhack = 1;
-		} else if(z>=1200) {		// Pinch zoom emulation
+		} else if(z>=1200) {		// Pinch zoom emulation & pinch rotation emulation
 			if(!ts->zoomhack) {	// Flush real position to avoid jumpiness
 				down = 0;
 				ts->zoomhack = 1;
 			}
 			else {
-				if(y>pdata->max_y) y=pdata->max_y;
+				int center_y = (pdata->max_y + pdata->min_y + 1)/2;		// Calc X center
+				int center_x = (pdata->max_x + pdata->min_x + 1)/2;		// Calc Y center
+
+				int pinch_radius = (y - pdata->min_y + 1)/2;			// Base pinch radius on y position
+
+				int height = pdata->max_y - pdata->min_y;			// Calibrate radius into screen coordinates
+				int pinch_radius_cal = (pinch_radius*800+height/2)/height;
+
+				int pinch_x = x - center_x;					// Get x offset and do a calibration on it
+				int width = pdata->max_x - pdata->min_x;
+				int pinch_x_cal = (pinch_x*480+width/2)/width;
+
+				int pinch_y_cal = int_sqrt(pinch_radius_cal*pinch_radius_cal - pinch_x_cal*pinch_x_cal);	// Make sure pinch distance is the same even
+																// if we move x around. Pythagoras is our friend.
+				int pinch_y = (pinch_y_cal * height + 400)/800;			// Uncalibrate y offset
+				if(pinch_y>1000) pinch_y = 0;
+
 				// Finger1
                 	        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
                       		input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, 516);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, 447 - y/2);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, center_x + pinch_x);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, center_y - pinch_y);
                         	input_mt_sync(ts->input_dev);
 				// Finger2
                         	input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
                         	input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, 516);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, 447 + y/2);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, center_x - pinch_x);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, center_y + pinch_y);
                         	input_mt_sync(ts->input_dev);
 			}
 		} else {
