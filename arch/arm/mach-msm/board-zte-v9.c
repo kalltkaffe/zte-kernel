@@ -2380,9 +2380,9 @@ struct msm_ts_platform_data msm_tssc_pdata ={
 #elif defined( CONFIG_TOUCHSCREEN_MSM)
 #ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 struct ts_virt_key virt_key[3] = {
-  {KEY_HOME,0,305, },
-  {KEY_MENU,325,640, },
-  {KEY_BACK,660,950, },
+  {KEY_HOME,0,150, },
+  {KEY_MENU,165,315, },
+  {KEY_BACK,330,480, },
 };
 
 struct msm_ts_virtual_keys vkeys = {
@@ -2391,16 +2391,16 @@ struct msm_ts_virtual_keys vkeys = {
 };
 #endif
 struct msm_ts_platform_data msm_tssc_pdata = {
-	.min_x = 48,
-	.max_x = 950,
+	.min_x = 0,
+	.max_x = 480,
 	.min_y = 0,
-	.max_y = 902,
+	.max_y = 800,
 	.min_press =0,
 	.max_press =255,
 	.inv_y = 1000,
 #ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 	.vkeys_y = &vkeys,
-	.virt_y_start = 912,
+	.virt_y_start = 810,
 #endif
 };
 #endif

@@ -95,6 +95,17 @@ struct timer_list timer;  //wlyZTE_TS_ZT_005 @2010-03-05
 static uint32_t msm_tsdebug;
 module_param_named(tsdebug, msm_tsdebug, uint, 0664);
 
+static int32_t msm_tscal_scaler = 65536;
+static int32_t msm_tscal_xscale = 34875;
+static int32_t msm_tscal_xoffset = -26*65536;
+static int32_t msm_tscal_yscale = 58125;
+static int32_t msm_tscal_yoffset = 0;
+module_param_named(tscal_scaler, msm_tscal_scaler, int, 0664);
+module_param_named(tscal_xscale, msm_tscal_xscale, int, 0664);
+module_param_named(tscal_xoffset, msm_tscal_xoffset, int, 0664);
+module_param_named(tscal_yscale, msm_tscal_yscale, int, 0664);
+module_param_named(tscal_yoffset, msm_tscal_yoffset, int, 0664);
+
 #define tssc_readl(t, a)	(readl(((t)->tssc_base) + (a)))
 #define tssc_writel(t, v, a)	do {writel(v, ((t)->tssc_base) + (a));} while(0)
 
@@ -184,6 +195,11 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	if (x < 0) x = 0;
 	if (y < 0) y = 0;
 
+	// Calibrate
+        x = (x*msm_tscal_xscale + msm_tscal_xoffset + msm_tscal_scaler/2)/msm_tscal_scaler;
+        y = (y*msm_tscal_yscale + msm_tscal_yoffset + msm_tscal_scaler/2)/msm_tscal_scaler;
+
+
 #ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
 	if (!was_down && down) {
 		struct ts_virt_key *vkey = NULL;
@@ -227,34 +243,24 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 				ts->zoomhack = 1;
 			}
 			else {
-				int center_y = (pdata->max_y + pdata->min_y + 1)/2;		// Calc X center
-				int center_x = (pdata->max_x + pdata->min_x + 1)/2;		// Calc Y center
+				int pinch_radius = (y+1)/2;			// Base pinch radius on y position
+				int pinch_x = x - 240;				// Get x offset
 
-				int pinch_radius = (y - pdata->min_y + 1)/2;			// Base pinch radius on y position
-
-				int height = pdata->max_y - pdata->min_y;			// Calibrate radius into screen coordinates
-				int pinch_radius_cal = (pinch_radius*800+height/2)/height;
-
-				int pinch_x = x - center_x;					// Get x offset and do a calibration on it
-				int width = pdata->max_x - pdata->min_x;
-				int pinch_x_cal = (pinch_x*480+width/2)/width;
-
-				int pinch_y_cal = int_sqrt(pinch_radius_cal*pinch_radius_cal - pinch_x_cal*pinch_x_cal);	// Make sure pinch distance is the same even
-																// if we move x around. Pythagoras is our friend.
-				int pinch_y = (pinch_y_cal * height + 400)/800;			// Uncalibrate y offset
+				int pinch_y = int_sqrt(pinch_radius*pinch_radius - pinch_x*pinch_x);	// Make sure pinch distance is the same even
+													// if we move x around. Pythagoras is our friend.
 				if(pinch_y>1000) pinch_y = 0;
 
 				// Finger1
                 	        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
                       		input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, center_x + pinch_x);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, center_y - pinch_y);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, 240 + pinch_x);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, 400 - pinch_y);
                         	input_mt_sync(ts->input_dev);
 				// Finger2
                         	input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 255);
                         	input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, 10);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, center_x - pinch_x);
-                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, center_y + pinch_y);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_X, 240 - pinch_x);
+                        	input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, 400 + pinch_y);
                         	input_mt_sync(ts->input_dev);
 			}
 		} else {
@@ -504,12 +510,6 @@ err_input_dev_reg:
 	input_free_device(ts->input_dev);
 
 err_alloc_input_dev:
-#if 0
-err_start_tsadc:
-	marimba_tsadc_unregister(ts->ts_client);
-
-err_tsadc_register:
-#endif
 	iounmap(ts->tssc_base);
 
 err_ioremap_tssc:
