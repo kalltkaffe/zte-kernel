@@ -95,12 +95,12 @@ struct timer_list timer;  //wlyZTE_TS_ZT_005 @2010-03-05
 static uint32_t msm_tsdebug;
 module_param_named(tsdebug, msm_tsdebug, uint, 0664);
 
-static int32_t msm_tscal_scaler = 65536;
+//static int32_t msm_tscal_scaler = 65536;
 static int32_t msm_tscal_xscale = 34875;
 static int32_t msm_tscal_xoffset = -26*65536;
 static int32_t msm_tscal_yscale = 58125;
 static int32_t msm_tscal_yoffset = 0;
-module_param_named(tscal_scaler, msm_tscal_scaler, int, 0664);
+//module_param_named(tscal_scaler, msm_tscal_scaler, int, 0664);
 module_param_named(tscal_xscale, msm_tscal_xscale, int, 0664);
 module_param_named(tscal_xoffset, msm_tscal_xoffset, int, 0664);
 module_param_named(tscal_yscale, msm_tscal_yscale, int, 0664);
@@ -196,8 +196,10 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 	if (y < 0) y = 0;
 
 	// Calibrate
-        x = (x*msm_tscal_xscale + msm_tscal_xoffset + msm_tscal_scaler/2)/msm_tscal_scaler;
-        y = (y*msm_tscal_yscale + msm_tscal_yoffset + msm_tscal_scaler/2)/msm_tscal_scaler;
+//        x = (x*msm_tscal_xscale + msm_tscal_xoffset + msm_tscal_scaler/2)/msm_tscal_scaler;
+//        y = (y*msm_tscal_yscale + msm_tscal_yoffset + msm_tscal_scaler/2)/msm_tscal_scaler;
+        x = (x*msm_tscal_xscale + msm_tscal_xoffset + 32768)/65536;
+        y = (y*msm_tscal_yscale + msm_tscal_yoffset + 32768)/65536;
 
 
 #ifndef CONFIG_TOUCHSCREEN_VIRTUAL_KEYS
