@@ -100,11 +100,15 @@ static int32_t msm_tscal_xscale = 34875;
 static int32_t msm_tscal_xoffset = -26*65536;
 static int32_t msm_tscal_yscale = 58125;
 static int32_t msm_tscal_yoffset = 0;
+static int32_t msm_tscal_gesture_pressure = 1200;
+static int32_t msm_tscal_gesture_blindspot = 100;
 //module_param_named(tscal_scaler, msm_tscal_scaler, int, 0664);
 module_param_named(tscal_xscale, msm_tscal_xscale, int, 0664);
 module_param_named(tscal_xoffset, msm_tscal_xoffset, int, 0664);
 module_param_named(tscal_yscale, msm_tscal_yscale, int, 0664);
 module_param_named(tscal_yoffset, msm_tscal_yoffset, int, 0664);
+module_param_named(tscal_gesture_pressure, msm_tscal_gesture_pressure, int, 0664);
+module_param_named(tscal_gesture_blindspot, msm_tscal_gesture_blindspot, int, 0664);
 
 #define tssc_readl(t, a)	(readl(((t)->tssc_base) + (a)))
 #define tssc_writel(t, v, a)	do {writel(v, ((t)->tssc_base) + (a));} while(0)
@@ -236,11 +240,11 @@ static irqreturn_t msm_ts_irq(int irq, void *dev_id)
 
 
 	if (down) {
-		if(z>1100 && z<1200) { 		// blind spot (1101-1199)
+		if(z>(msm_tscal_gesture_pressure-msm_tscal_gesture_blindspot) && z<msm_tscal_gesture_pressure) { 	// blind spot (1101-1199)
 			down = 0;
 			ts->zoomhack = 1;
-		} else if(z>=1200) {		// Pinch zoom emulation & pinch rotation emulation
-			if(!ts->zoomhack) {	// Flush real position to avoid jumpiness
+		} else if(z>=msm_tscal_gesture_pressure) {	// Pinch zoom emulation & pinch rotation emulation
+			if(!ts->zoomhack) {			// Flush real position to avoid jumpiness
 				down = 0;
 				ts->zoomhack = 1;
 			}
