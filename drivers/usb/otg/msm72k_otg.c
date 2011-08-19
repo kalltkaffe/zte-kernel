@@ -34,8 +34,6 @@
 #include <linux/uaccess.h>
 #include <mach/clk.h>
 
-#include <linux/wakelock.h>
-
 #define MSM_USB_BASE	(dev->regs)
 #define is_host()	((OTGSC_ID & readl(USB_OTGSC)) ? 0 : 1)
 #define is_b_sess_vld()	((OTGSC_BSV & readl(USB_OTGSC)) ? 1 : 0)
@@ -46,8 +44,6 @@ static void otg_reset(struct otg_transceiver *xceiv);
 static void msm_otg_set_vbus_state(int online);
 
 struct msm_otg *the_msm_otg;
-
-static struct wake_lock msm72k_otg_wake_lock;
 
 static unsigned ulpi_read(struct msm_otg *dev, unsigned reg)
 {
@@ -458,14 +454,6 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 
 	if ((otgsc & OTGSC_IDIS) && (otgsc & OTGSC_IDIE)) {
 		pr_info("ID -> (%s)\n", (otgsc & OTGSC_ID) ? "B" : "A");
-		if (otgsc & OTGSC_ID ) {
-			pr_info("OTG WAKE UNLOCKED");
-			wake_lock_destroy(&msm72k_otg_wake_lock);
-		} else {
-			pr_info("OTG WAKE LOCKED");
-			wake_lock_init(&msm72k_otg_wake_lock, WAKE_LOCK_SUSPEND, "msm72k_otg");
-			wake_lock(&msm72k_otg_wake_lock);
-		}
 		msm_otg_start_host(&dev->otg, is_host());
 	} else if ((otgsc & OTGSC_BSVIS) && (otgsc & OTGSC_BSVIE)) {
 		pr_info("VBUS - (%s)\n", otgsc & OTGSC_BSV ? "ON" : "OFF");
