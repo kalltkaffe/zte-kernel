@@ -16,10 +16,6 @@
  *
  */
 
-/*
-2010.11.30   cuihj_modified     remove the reset  in  msm_otg_suspend.  
-2010.12.17   ruanmeisi           schedule a resume work in otg_irq.
-*/
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
@@ -38,6 +34,8 @@
 #include <linux/uaccess.h>
 #include <mach/clk.h>
 
+#include <linux/wakelock.h>
+
 #define MSM_USB_BASE	(dev->regs)
 #define is_host()	((OTGSC_ID & readl(USB_OTGSC)) ? 0 : 1)
 #define is_b_sess_vld()	((OTGSC_BSV & readl(USB_OTGSC)) ? 1 : 0)
@@ -46,12 +44,10 @@
 
 static void otg_reset(struct otg_transceiver *xceiv);
 static void msm_otg_set_vbus_state(int online);
-//ruanmeisi_20101217 work for resume
-static void schedule_otg_work(struct msm_otg *dev);
-static void init_otg_work(void);
-//end
 
 struct msm_otg *the_msm_otg;
+
+static struct wake_lock msm72k_otg_wake_lock;
 
 static unsigned ulpi_read(struct msm_otg *dev, unsigned reg)
 {
@@ -217,7 +213,7 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	#if  1
 	if (!is_host())
 		otg_reset(&dev->otg);
-   #endif 
+	#endif
 	/* In case of fast plug-in and plug-out inside the otg_reset() the
 	 * servicing of BSV is missed (in the window of after phy and link
 	 * reset). Handle it if any missing bsv is detected.
@@ -452,10 +448,7 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 	u32 otgsc = 0;
 
 	if (atomic_read(&dev->in_lpm)) {
-         //ruanmeisi_20101216 call msm_otg_set_suspend to resume in workqueue
-		//msm_otg_resume(dev);
-		schedule_otg_work(dev);
-		//end
+		msm_otg_resume(dev);
 		return IRQ_HANDLED;
 	}
 
@@ -465,6 +458,14 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 
 	if ((otgsc & OTGSC_IDIS) && (otgsc & OTGSC_IDIE)) {
 		pr_info("ID -> (%s)\n", (otgsc & OTGSC_ID) ? "B" : "A");
+		if (otgsc & OTGSC_ID ) {
+			pr_info("OTG WAKE UNLOCKED");
+			wake_lock_destroy(&msm72k_otg_wake_lock);
+		} else {
+			pr_info("OTG WAKE LOCKED");
+			wake_lock_init(&msm72k_otg_wake_lock, WAKE_LOCK_SUSPEND, "msm72k_otg");
+			wake_lock(&msm72k_otg_wake_lock);
+		}
 		msm_otg_start_host(&dev->otg, is_host());
 	} else if ((otgsc & OTGSC_BSVIS) && (otgsc & OTGSC_BSVIE)) {
 		pr_info("VBUS - (%s)\n", otgsc & OTGSC_BSV ? "ON" : "OFF");
@@ -998,9 +999,6 @@ static struct platform_driver msm_otg_driver = {
 
 static int __init msm_otg_init(void)
 {
-    //ruanmeisi_20101217
-	init_otg_work();
-	//end
 	return platform_driver_probe(&msm_otg_driver, msm_otg_probe);
 }
 
@@ -1015,37 +1013,3 @@ module_exit(msm_otg_exit);
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("MSM usb transceiver driver");
 MODULE_VERSION("1.00");
-
-
-struct otg_resume_work {
-	struct msm_otg *dev ;
-	struct work_struct work;
-	
-};
-
-static struct otg_resume_work otg_work;
-
-static void otg_resume_worker(struct work_struct *work)
-{
-	struct otg_resume_work *rwork = container_of(work, struct otg_resume_work, work);
-
-	if (NULL == rwork || NULL == rwork->dev) {
-		printk(KERN_ERR"otg:err %s %d: otg_resume_worker fail\n", __FUNCTION__, __LINE__);
-		return ;
-	}
-	msm_otg_set_suspend(&(rwork->dev->otg), 0);
-	return ;
-}
-
-static void init_otg_work(void)
-{
-	memset(&otg_work, 0, sizeof(otg_work));
-
-	INIT_WORK(&(otg_work.work), otg_resume_worker);
-}
-
-static void schedule_otg_work(struct msm_otg *dev)
-{
-	otg_work.dev = dev;
-	schedule_work(&(otg_work.work));
-}
